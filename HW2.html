@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+<!--
+Created using JS Bin
+http://jsbin.com
+
+Copyright (c) 2018 by ramonpetgrave64 (http://jsbin.com/niqaduc/2/edit)
+
+Released under the MIT license: http://jsbin.mit-license.org
+-->
+<meta name="robots" content="noindex">
+  <meta name="viewport" content="width=device-width">
+  <title>JS Bin</title>
+  <script src="https://serv.cusp.nyu.edu/~hvo/files/us-refugees.js" type="text/javascript"></script>
+
+<style id="jsbin-css">
+.bar {
+  fill: SteelBlue;
+  stroke: Black;
+}
+
+.bar:hover {
+  fill: Salmon;
+}
+
+.axis--x path,
+.axis--y path {
+  display: none;
+}
+
+.label {
+  fill: Black;
+  font-size: 18px;
+}
+
+.grid line {
+  stroke: LightGrey;
+}
+
+.tooltip {
+  position: absolute;
+  z-index: 10;
+  visibility: hidden;
+  background: Beige;
+  padding: 5px;
+  border: 1px solid Black;
+}
+</style>
+</head>
+<body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/4.2.3/d3.min.js"></script>
+  <div id="chart">
+  <svg width="800" height="1000"></svg>
+</div>
+<script>
+var emissions = [{"State": "Texas", "Total": 709}, {"State": "California", "Total": 359}, {"State": "Pennsylvania", "Total": 242}, {"State": "Illinois", "Total": 233}, {"State": "Ohio", "Total": 229}, {"State": "Florida", "Total": 227}, {"State": "Louisiana", "Total": 207}, {"State": "Indiana", "Total": 203}, {"State": "New York (state)", "Total": 170}, {"State": "Michigan", "Total": 162}, {"State": "Georgia (U.S. state)", "Total": 139}, {"State": "Kentucky", "Total": 138}, {"State": "Missouri", "Total": 131}, {"State": "North Carolina", "Total": 126}, {"State": "Alabama", "Total": 121}, {"State": "New Jersey", "Total": 114}, {"State": "Oklahoma", "Total": 104}, {"State": "Virginia", "Total": 103}, {"State": "Tennessee", "Total": 103}, {"State": "Wisconsin", "Total": 101}, {"State": "West Virginia", "Total": 97}, {"State": "Minnesota", "Total": 94}, {"State": "Arizona", "Total": 93}, {"State": "Colorado", "Total": 91}, {"State": "Iowa", "Total": 83}, {"State": "South Carolina", "Total": 74}, {"State": "Washington (state)", "Total": 73}, {"State": "Kansas", "Total": 70}, {"State": "Arkansas", "Total": 69}, {"State": "Wyoming", "Total": 65}, {"State": "Utah", "Total": 64}, {"State": "Massachusetts", "Total": 64}, {"State": "Mississippi", "Total": 64}, {"State": "Maryland", "Total": 62}, {"State": "North Dakota", "Total": 55}, {"State": "Nebraska", "Total": 52}, {"State": "New Mexico", "Total": 50}, {"State": "Oregon", "Total": 38}, {"State": "Nevada", "Total": 37}, {"State": "Connecticut", "Total": 35}, {"State": "Alaska", "Total": 35}, {"State": "Montana", "Total": 32}, {"State": "Hawaii", "Total": 18}, {"State": "Maine", "Total": 17}, {"State": "Idaho", "Total": 17}, {"State": "South Dakota", "Total": 15}, {"State": "New Hampshire", "Total": 15}, {"State": "Delaware", "Total": 13}, {"State": "Rhode Island", "Total": 11}, {"State": "Vermont", "Total": 6}, {"State": "District of Columbia", "Total": 3}, ];
+var data = emissions.map(obj => [obj['State'], obj['Total']]);
+
+// var data = refugees.map(obj => [obj['Year'], Object.entries(obj)
+//   .filter(item => { return item[0]!=='Year'; })
+//   .reduce((total, item) => { return total+item[1];},
+//           0)]); 
+
+var maxValue = d3.max(data, d => d[1]);
+var x        = d3.scaleLinear()
+                  .domain([0, maxValue])
+                  .rangeRound([0, 230]);
+var y        = d3.scaleBand()
+                  .domain(data.map(d => d[0]))
+                  .rangeRound([50, 950]);
+
+var svg = d3.select("svg");
+var g   = svg.append("g");
+
+g.attr('transform', 'translate(80, 0)')
+
+g.append('g')
+  .attr('class', 'axis--y')
+  .attr('transform', 'translate(55, -2)')
+  .call(d3.axisLeft(y))
+  .append("text")
+    .attr("class", "label")
+    .attr("transform", "rotate(-90)")
+    .attr("x", -y.range()[1]*0.5)
+    .attr("y", -110)
+    .text("U.S State")
+
+g.append('g')
+  .attr('class', 'axis axis--x')
+  .attr('transform', 'translate(60, 950)')
+    .call(d3.axisBottom(x).ticks(4).tickFormat(d3.format(".2s")))
+  .append("text")
+    .attr("class", "label")
+    .attr("x", 100)
+    .attr("y", 50)
+    .text("CO2 Emissions (Ms of Metric Tons) in 2011")
+
+g.append("text")
+      .attr("class", "label")
+      .attr('width', '30px')
+      .attr("x", 0)
+      .attr("y", 1050)
+      .text("U.S. State CO2 emission totals for the year 2011.")
+g.append("text")
+      .attr("class", "label")
+      .attr('width', '30px')
+      .attr("x", 0)
+      .attr("y", 1080)
+      .text("Texas and California have the largest totals.")
+
+
+g.append('g')
+  .attr('class', 'axis axis--x')
+  .attr('transform', 'translate(60, 50)')
+    .call(d3.axisTop(x).ticks(4).tickFormat(d3.format(".2s")))
+
+g.append('g')
+  .attr('class', 'grid axis--x')
+  .attr('transform', 'translate(60, 50)')
+    .call(d3.axisTop(x).ticks(4).tickSize(-900).tickFormat(""))
+
+var tooltip = d3.select("body").append("div")
+                .attr("class", "tooltip");
+
+g.selectAll('.bar')
+  .data(data)
+  .enter().append('rect')
+    .attr('class', 'bar')
+    .attr('x', 60)
+    .attr('y', d => y(d[0]))
+    .attr('width', d => x(d[1]))
+    .attr('height', 18)
+    .on("mouseover", function (d) {
+      d3.select(this)
+        .transition().ease(d3.easeBounce).duration(500)
+        .attr("x", 60-10)
+        .attr('y', d => (y(d[0])-2))
+        .attr('width', d => (x(d[1])+20))
+        .attr('height', y.bandwidth()+2);
+      tooltip.text(d3.format(',')(d[1]));
+      tooltip.style("visibility", "visible");
+    })
+    .on("mouseout", function (d) {
+      d3.select(this)
+        .transition().duration(300)
+        .attr('x', 60)
+        .attr('y', d => y(d[0]))
+        .attr('width', d => x(d[1]))
+        .attr('height', 18)
+      tooltip.style("visibility", "htidden");
+    })
+    .on("mousemove", function (d) {
+      tooltip.style("top", d3.event.pageY+20+"px")
+             .style("left", d3.event.pageX+10+"px")
+    })
+</script>
+
+</body>
+</html>
