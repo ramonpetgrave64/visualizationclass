@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+<!--
+Created using JS Bin
+http://jsbin.com
+
+Copyright (c) 2018 by ramonpetgrave64 (http://jsbin.com/tuqoqit/11/edit)
+
+Released under the MIT license: http://jsbin.mit-license.org
+-->
+<meta name="robots" content="noindex">
+  <meta name="viewport" content="width=device-width">
+  <title>Restaurants Map</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/4.2.3/d3.min.js"></script>
+<script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+  
+<style id="jsbin-css">
+.bar {
+  fill: LightGrey;
+  stroke: Black;
+}
+
+.bar:hover {
+  fill: SteelBlue;
+}
+
+.axis--x path,
+.axis--y path {
+  display: none;
+}
+
+.label {
+  fill: Black;
+  font-size: 15px;
+  text-anchor: start
+}
+
+.grid line {
+  stroke: LightGrey;
+}
+
+.district {
+  fill: transparent;
+  stroke: black;
+}
+
+.tooltip {
+  position: absolute;
+  z-index: 10;
+  visibility: hidden;
+  background: Beige;
+  padding: 5px;
+  border: 1px solid Black;
+}
+</style>
+</head>
+<body>
+	<H2>NYC Wi-Fi Map</H2>
+	By Ramon Petgrave <br>
+	<p>
+		Provides a choropleth map, by zip codes, of public Wi-Fi hotposts around New York City.
+	</p>
+	<p>
+		The dataset is provided by the NYC Open Data:
+		<br><a href="https://data.cityofnewyork.us/City-Government/NYC-Wi-Fi-Hotspot-Locations/yjub-udmw">https://data.cityofnewyork.us/City-Government/NYC-Wi-Fi-Hotspot-Locations/yjub-udmw</a>
+	</p>
+	<p>
+		The dataset is accessed by the Socrata Open Data API and SoQL:<br><a href="https://dev.socrata.com/foundry/data.cityofnewyork.us/24t3-xqyv">https://dev.socrata.com/foundry/data.cityofnewyork.us/24t3-xqyv</a>
+	</p>
+	<br>
+<div>
+	<div id ="controller"></div>
+  <svg id="vis" width="800" height = "800"></svg>
+</div>
+<script>
+var ZIP_URL = "https://raw.githubusercontent.com/hvo/datasets/master/nyc_zip.geojson";
+
+var svg = d3.select("#vis");
+var containerSize = [svg.attr('width'), svg.attr('height')]
+var chartOffsetX = 150;
+var chartOffsetY = 100;
+var chartHeightLimit = 600;
+// var chartSize = [Math.min(300, containerSize[0]/3) + chartOffsetX, containerSize[1]]
+var chartSize = [Math.min(300, containerSize[0]/3) + chartOffsetX,
+                 Math.min(chartHeightLimit, containerSize[1])- chartOffsetY]
+var mapSize = [containerSize[0] - chartSize[0], containerSize[1]]
+
+var chart;
+var data;
+var gMap;
+var legend;
+var legendX;
+var legend_data;
+var legend_text;
+var legend_width = 250;
+
+var BASE_URL = 'https://data.cityofnewyork.us/resource/24t3-xqyv.json?';
+var TYPE_URL = BASE_URL + '$select=type&$group=type';
+var YEAR_URL = BASE_URL + '$select=date_extract_y(activated)&$group=date_extract_y(activated)&$where=date_extract_y(activated)<9000';
+var TALLY_PARAM = '';
+var YEAR_SELECT = ''
+
+// d3.queue()
+//   .defer(d3.json, YEAR_URL)
+//   .await(create_year_selector);
+
+d3.queue()
+  .defer(d3.json, ZIP_URL)
+  .await(createMap);
+
+createLegend();
+
+create_filter_selector();
+
+// function create_year_selector(error, data){
+// 	data = data.map(obj => obj.date_extract_y_activated)
+	
+// 	controller = d3.select("#controller");
+	
+// 	controller.append("text").text(' Year:')
+	
+// 	filter_controller = controller.append("select");
+// 	filter_controller.append('option').text('All')
+	
+// 	filter_controller.selectAll()
+// 		.data(data).enter()
+// 		.append('option')
+// 			.text(d => d)
+	
+// 	filter_controller.on('change', function (){
+// 		YEAR_PARAM = this.value;
+// 		update_tally();
+// 	})
+	
+// 	YEAR_PARAM = data[0];
+// 	update_tally();
+// }
+
+function create_filter_selector() {
+	data = ['Type', 'Provider'];
+	controller = d3.select("#controller");
+	
+	controller.append("text").text('Filter:')
+
+	filter_controller = controller.append("select");
+	filter_controller.selectAll()
+		.data(data).enter()
+		.append('option')
+			.text(d => d)
+	
+	filter_controller.on('change', function (){
+		TALLY_PARAM = this.value;
+		update_tally();
+	})
+	
+	TALLY_PARAM = data[0];
+	update_tally();
+}
+
+function update_tally(){
+	var TALLY_URL = BASE_URL + `$select=${TALLY_PARAM},count(objectid)&$group=${TALLY_PARAM}`
+	d3.queue()
+  .defer(d3.json, TALLY_URL)
+  .await(createChart);
+}
+
+function createMap(error, districts) {
+  districts_data = districts;
+  var canvasSize = mapSize;
+      gMap       = svg.append("g");
+      gMap.attr('transform', `translate(${chartSize[0]}, ${0})`);
+  
+  // log2(256/(2*M_PI)) ~ 5.34
+  
+  var power = 10 + Math.log(Math.min(mapSize[0],mapSize[1])/9.875)/Math.log(2);
+  var scale = Math.pow(2, power);
+  var projection = d3.geoMercator()
+                      .scale(scale)
+                      .center([-73.975, 40.7])
+                      .translate([canvasSize[0]/2,
+                                  canvasSize[1]/2]);
+  var path       = d3.geoPath()
+                      .projection(projection);
+  
+  gMap.selectAll(".district")
+    .data(districts.features)
+    .enter().append("path")
+      .attr("class", "district")
+      .attr("d", path);
+}
+
+function colorMap(error, tally){
+	data = tally.map(obj => [parseInt(obj.zip), parseInt(obj.count_objectid)]);
+  
+  maxV  = d3.max(data, d => d[1]);
+	
+  color = d3.scaleThreshold()
+             .domain(d3.range(0, maxV, maxV/5))
+             .range(d3.schemeBlues[5]);
+  
+  gMap.selectAll(".district")
+    .transition().duration(500)
+    .style("fill", 'transparent')
+  
+  gMap.selectAll(".district")
+    .data(data)
+      .transition().duration(500)
+      .style("fill", d =>color(d[1]))
+  
+  legend_text.text(`Number of ${TALLY_PARAM}`)
+  legend_data.forEach(function(item, index, array){
+    array[index] = maxV*index/5
+  });
+  legend.selectAll('.segment')
+    .data(legend_data);
+  
+  legendX = d3.scaleBand()
+            .domain(legend_data.map(d => d))
+            .rangeRound([0, legend_width]);
+  
+  
+  legend.selectAll('.segment')
+    .style("fill", d => color(d))
+  
+  legend.select('#legend-axis')
+    .call(d3.axisBottom(legendX).ticks(5)
+    .tickFormat(d3.format('.0s'))
+    .tickSize(-15))
+//     .tickFormat(d3.format('.2s')))
+}
+
+
+function createLegend() {
+  legend_data = [0,1,2,3];
+  legend = svg.append('g')
+        .attr('transform',`translate(${chartSize[0]+50}, ${chartOffsetY/2})`)
+  legendX = d3.scaleBand()
+            .domain(legend_data.map(d => d))
+            .rangeRound([0, legend_width]);
+  
+  legend.selectAll('.segment')
+  .data(legend_data)
+  .enter().append('rect')
+    .attr("class", "segment")
+    .attr('x', d => legendX(d))
+    .attr('width', legend_width/4)
+    .attr('height', 10)
+//     .style('stroke', 'black')
+    .style('fill', 'transparent')
+  
+  legend.append('g')
+  .attr('class', 'axis axis--x')
+  .attr('id', 'legend-axis')
+  .attr('transform', `translate(${-legend_width/4+legend_width/8}, ${15})`)
+  .call(d3.axisBottom(legendX).ticks()
+  .tickSize(-15))
+//   .tickFormat(d3.format('.2s')))
+	
+  
+  legend_text = legend.select('g')
+                  .append("text")
+                    .attr("class", "label")
+                    .attr("x", legend_width/8)
+                    .attr("y", -25)
+                    .style('text-anchor', 'start')
+                    .text(`Number of ${TALLY_PARAM}`);  
+}
+
+
+function createChart(error, tally) {
+//   console.log(tally)
+// 	console.log(tally[0].type)
+ 
+  var canvasSize = chartSize;
+  var itemLimit = 25;
+  var barHeight = Math.min(18, (chartSize[1]-chartOffsetY)/itemLimit-2);
+  
+	d3.select("#chart").remove()
+	
+  chart   = svg.append("g")
+							.attr('id','chart')
+              .attr('transform',`translate(${chartOffsetX}, ${chartOffsetY/2})`)
+  
+  
+  data = tally.map(obj => [obj[TALLY_PARAM], parseInt(obj.count_objectid)]);
+  
+  data.sort(function(a, b) {
+    return b[1] - a[1];
+  });
+  
+//   data = data.slice(0, itemLimit)
+	
+  var maxValue = d3.max(data, d => d[1]);
+	
+  var x        = d3.scaleLinear()
+                   .domain([0, maxValue])
+                   .rangeRound([0, canvasSize[0] - chartOffsetX]);
+  var y        = d3.scaleBand()
+                   .domain(data.map(d => d[0]))
+                     .rangeRound([0, Math.min(chartHeightLimit,chartSize[1]/itemLimit*data.length)]);
+  
+  var tooltip = d3.select("body").append("div")
+                .attr("class", "tooltip");
+  
+chart.append('g')
+  .attr('class', 'axis--y')
+  .call(d3.axisLeft(y))
+  
+chart.append('g')
+  .attr('class', 'axis axis--x')
+  .call(d3.axisTop(x).ticks(5)
+        .tickFormat(d3.format(',')))
+  
+  chart.append('g')
+  .attr('class', 'grid axis--x')
+  .call(d3.axisTop(x).ticks(5).tickSize(-chartSize[1]+chartOffsetY).tickFormat(""))
+  
+chart.append('g')
+  .attr('class', 'axis axis--x')
+  .attr('transform', `translate(${0}, ${chartSize[1]-chartOffsetY})`)
+  .call(d3.axisBottom(x).ticks(5)
+  .tickFormat(d3.format(',')))
+  .append("text")
+    .attr("class", "label")
+    .attr("x", 0)
+    .attr("y", chartOffsetY/2)
+    .text("Number");
+  
+  
+  chart.selectAll('.bar')
+  .data(data)
+  .enter().append('rect')
+    .attr('class', 'bar')
+    .attr('x', 0)
+    .attr('y', d => y(d[0]) + y.bandwidth()/2 - barHeight/2)
+    .attr('width', d => x(d[1]))
+    .attr('height', barHeight)
+    .on("mouseover", function (d) {
+      d3.select(this)
+        .transition().ease(d3.easeBounce).duration(500)
+        .attr("x", -5)
+        .attr('y', d => y(d[0]) + 1)
+        .attr('width', d => x(d[1])+10)
+        .attr('height', y.bandwidth() - 2);
+      tooltip.text(d3.format(',')(d[1]));
+      tooltip.style("visibility", "visible");
+    
+
+			filter_url = BASE_URL + `$select=zip,count(objectid)&$where=${TALLY_PARAM}='${d[0]}'&$group=zip`
+			d3.queue()
+				.defer(d3.json, filter_url)
+				.await(colorMap);
+			
+//       colorMap(d[0]);
+    })
+    .on("mouseout", function (d) {
+      d3.select(this)
+        .transition().duration(300)
+        .attr('x', 0)
+        .attr('y', d => y(d[0]) + y.bandwidth()/2 - barHeight/2)
+        .attr('width', d => x(d[1]))
+        .attr('height', barHeight)
+      tooltip.style("visibility", "hidden");
+    })
+    .on("mousemove", function (d) {
+      tooltip.style("top", d3.event.pageY+20+"px")
+             .style("left", d3.event.pageX+10+"px")
+    })
+}
+</script>
+<script src="https://static.jsbin.com/js/render/edit.js?4.1.7"></script>
+<script>jsbinShowEdit && jsbinShowEdit({"static":"https://static.jsbin.com","root":"https://jsbin.com"});</script>
+<script>
+(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+ga('create', 'UA-1656750-34', 'auto');
+ga('require', 'linkid', 'linkid.js');
+ga('require', 'displayfeatures');
+ga('send', 'pageview');
+
+</script>
+
+</body>
+</html>
