@@ -186,8 +186,8 @@ function colorMap(error, tally){
   maxV  = d3.max(data, d => d[1]);
 	
   color = d3.scaleThreshold()
-             .domain(d3.range(0, maxV, maxV/5))
-             .range(d3.schemeBlues[5]);
+             .domain(d3.range(0, maxV, maxV/legend_data.length))
+             .range(d3.schemeBlues[legend_data.length]);
   
   gMap.selectAll(".district")
     .transition().duration(500)
@@ -222,19 +222,19 @@ function colorMap(error, tally){
 
 
 function createLegend() {
-  legend_data = [0,1,2,3];
+	legend_data = [0,1,2,3,4];
   legend = svg.append('g')
         .attr('transform',`translate(${chartSize[0]+50}, ${chartOffsetY/2})`)
   legendX = d3.scaleBand()
-            .domain(legend_data.map(d => d))
+            .domain(legend_data)
             .rangeRound([0, legend_width]);
   
   legend.selectAll('.segment')
-  .data(legend_data)
+  .data(legend_data.slice(0, legend_data.length-1))
   .enter().append('rect')
     .attr("class", "segment")
-    .attr('x', d => legendX(d))
-    .attr('width', legend_width/4)
+    .attr('x', d => legendX(d) + 1)
+    .attr('width', legend_width/legend_data.length)
     .attr('height', 10)
 //     .style('stroke', 'black')
     .style('fill', 'transparent')
@@ -242,11 +242,10 @@ function createLegend() {
   legend.append('g')
   .attr('class', 'axis axis--x')
   .attr('id', 'legend-axis')
-  .attr('transform', `translate(${-legend_width/4+legend_width/8}, ${15})`)
+  .attr('transform', `translate(${-legend_width/legend_data.length/2}, ${15})`)
   .call(d3.axisBottom(legendX).ticks()
-  .tickSize(-15))
-//   .tickFormat(d3.format('.2s')))
-	
+  .tickSize(-15)
+  .tickFormat(d3.format('.2s')))
   
   legend_text = legend.select('g')
                   .append("text")
@@ -254,7 +253,7 @@ function createLegend() {
                     .attr("x", legend_width/8)
                     .attr("y", -25)
                     .style('text-anchor', 'start')
-                    .text(`Number of ${TALLY_PARAM}`);  
+                    .text("Number of Restaurants");  
 }
 
 
