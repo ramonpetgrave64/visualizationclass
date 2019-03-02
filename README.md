@@ -1,4 +1,4 @@
- ## A D3 [Choropleth Map and Bar Chart of NYC Public Wi-Fi Hotspots](https://ramonpetgrave64.github.io/visualizationclass/Wi-Fi-Map.html)
+## A D3 [Choropleth Map and Bar Chart of NYC Public Wi-Fi Hotspots](https://ramonpetgrave64.github.io/visualizationclass/Wi-Fi-Map.html)
  
 - Provides a choropleth map, by zip codes, of public Wi-Fi hotposts around New York City.
 
